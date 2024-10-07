@@ -1,7 +1,7 @@
 package channel
 
 import (
-	"WebRTC_POC/connection"
+	"WebRTC_POC/pkg/connection"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -10,7 +10,7 @@ type Channel struct {
 	connConfig connection.Config
 }
 
-func NewChannel() *Channel {
+func New() *Channel {
 	return &Channel{}
 }
 

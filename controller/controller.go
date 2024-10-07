@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"WebRTC_POC/service"
+	"WebRTC_POC/server/backend"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -18,27 +18,27 @@ type Request struct {
 }
 
 type Controller struct {
-	s *service.Service
+	backend *backend.Backend
 }
 
-func NewController(service *service.Service) *Controller {
+func New(be *backend.Backend) *Controller {
 	return &Controller{
-		s: service,
+		backend: be,
 	}
 }
 
 func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case broadcast:
-		c.Broadcast(w, r, c.s)
+		Broadcast(w, r, c.backend)
 	case view:
-		c.View(w, r, c.s)
+		View(w, r, c.backend)
 	default:
 		http.Error(w, "wrong path", http.StatusNotFound)
 	}
 }
 
-func (c *Controller) Broadcast(w http.ResponseWriter, r *http.Request, s *service.Service) {
+func Broadcast(w http.ResponseWriter, r *http.Request, be *backend.Backend) {
 	d, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed read body", http.StatusBadRequest)
@@ -49,12 +49,12 @@ func (c *Controller) Broadcast(w http.ResponseWriter, r *http.Request, s *servic
 	if err = json.Unmarshal(d, &req); err != nil {
 		http.Error(w, "failed parse body", http.StatusBadRequest)
 	}
-	if err = s.Broadcast(req.Key, req.Sdp); err != nil {
+	if err = be.Channel.Broadcast(req.Key, req.Sdp); err != nil {
 		http.Error(w, "failed broadcast", http.StatusInternalServerError)
 	}
 }
 
-func (c *Controller) View(w http.ResponseWriter, r *http.Request, s *service.Service) {
+func View(w http.ResponseWriter, r *http.Request, be *backend.Backend) {
 	d, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed read body", http.StatusBadRequest)
@@ -65,7 +65,7 @@ func (c *Controller) View(w http.ResponseWriter, r *http.Request, s *service.Ser
 	if err = json.Unmarshal(d, &req); err != nil {
 		http.Error(w, "failed parse body", http.StatusBadRequest)
 	}
-	if err = s.View(req.Key, req.Sdp); err != nil {
+	if err = be.Channel.View(req.Key, req.Sdp); err != nil {
 		http.Error(w, "failed view", http.StatusInternalServerError)
 	}
 }

@@ -2,7 +2,7 @@ package frontend
 
 import "net/http"
 
-func NewServer() http.Handler {
+func New() http.Handler {
 	mux := http.NewServeMux()
 	//fs := http.FileServer(http.Dir("./frontend/static"))
 	//mux.Handle("/static/", http.StripPrefix("/static/", fs))
