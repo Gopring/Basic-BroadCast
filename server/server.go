@@ -5,7 +5,7 @@ import (
 	"WebRTC_POC/frontend"
 	"WebRTC_POC/server/backend"
 	"WebRTC_POC/server/coordinator"
-	"WebRTC_POC/server/database"
+	"WebRTC_POC/server/database/memdb"
 	"WebRTC_POC/server/metric"
 	"fmt"
 	"net/http"
@@ -18,7 +18,7 @@ type Server struct {
 func New() *Server {
 	cm := coordinator.New()
 	me := metric.New()
-	db := database.New()
+	db := memdb.New()
 	be := backend.New(cm, me, db)
 	con := controller.New(be)
 
