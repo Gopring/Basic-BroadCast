@@ -7,9 +7,9 @@ import (
 )
 
 type Backend struct {
-	Channel  *coordinator.Coordinator
-	Metric   *metric.Metric
-	Database database.Database
+	Coordinator *coordinator.Coordinator
+	Metric      *metric.Metric
+	Database    database.Database
 }
 
 func New(ch *coordinator.Coordinator,
@@ -17,8 +17,8 @@ func New(ch *coordinator.Coordinator,
 	db database.Database,
 ) *Backend {
 	return &Backend{
-		Channel:  ch,
-		Metric:   me,
-		Database: db,
+		Coordinator: ch,
+		Metric:      me,
+		Database:    db,
 	}
 }

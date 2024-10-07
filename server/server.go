@@ -6,6 +6,9 @@ import (
 	"WebRTC_POC/server/backend"
 	"WebRTC_POC/server/coordinator"
 	"WebRTC_POC/server/database/memdb"
+	"WebRTC_POC/server/interceptor"
+	"WebRTC_POC/server/interceptor/auth"
+	"WebRTC_POC/server/interceptor/cors"
 	"WebRTC_POC/server/metric"
 	"fmt"
 	"net/http"
@@ -19,12 +22,14 @@ func New() *Server {
 	cm := coordinator.New()
 	me := metric.New()
 	db := memdb.New()
+
 	be := backend.New(cm, me, db)
 	con := controller.New(be)
+	mw := interceptor.New(auth.New(), cors.New())
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/channel", con)
+	mux.Handle("/channel", interceptor.WithInterceptors(con, mw))
 
 	fs := frontend.New()
 	mux.Handle("/", fs)

@@ -49,7 +49,7 @@ func Broadcast(w http.ResponseWriter, r *http.Request, be *backend.Backend) {
 	if err = json.Unmarshal(d, &req); err != nil {
 		http.Error(w, "failed parse body", http.StatusBadRequest)
 	}
-	if err = be.Channel.Broadcast(req.Key, req.Sdp); err != nil {
+	if err = be.Coordinator.Broadcast(req.Key, req.Sdp); err != nil {
 		http.Error(w, "failed broadcast", http.StatusInternalServerError)
 	}
 }
@@ -65,7 +65,7 @@ func View(w http.ResponseWriter, r *http.Request, be *backend.Backend) {
 	if err = json.Unmarshal(d, &req); err != nil {
 		http.Error(w, "failed parse body", http.StatusBadRequest)
 	}
-	if err = be.Channel.View(req.Key, req.Sdp); err != nil {
+	if err = be.Coordinator.View(req.Key, req.Sdp); err != nil {
 		http.Error(w, "failed view", http.StatusInternalServerError)
 	}
 }
