@@ -2,6 +2,7 @@ package controller
 
 import (
 	"WebRTC_POC/server/backend"
+	"WebRTC_POC/server/logging"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -49,7 +50,7 @@ func Broadcast(w http.ResponseWriter, r *http.Request, be *backend.Backend) {
 	if err = json.Unmarshal(d, &req); err != nil {
 		http.Error(w, "failed parse body", http.StatusBadRequest)
 	}
-	if err = be.Coordinator.Broadcast(req.ID, req.Sdp); err != nil {
+	if err = be.Channels.Broadcast(r.Context(), req.ID, req.Sdp); err != nil {
 		http.Error(w, "failed broadcast", http.StatusInternalServerError)
 	}
 }
@@ -65,7 +66,8 @@ func View(w http.ResponseWriter, r *http.Request, be *backend.Backend) {
 	if err = json.Unmarshal(d, &req); err != nil {
 		http.Error(w, "failed parse body", http.StatusBadRequest)
 	}
-	if err = be.Coordinator.View(req.ID, req.Sdp); err != nil {
+	if err = be.Channels.View(r.Context(), req.ID, req.Sdp); err != nil {
 		http.Error(w, "failed view", http.StatusInternalServerError)
+		logging.From(r.Context()).Error(err)
 	}
 }

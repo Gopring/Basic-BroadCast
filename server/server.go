@@ -1,18 +1,20 @@
 package server
 
 import (
-	"WebRTC_POC/controller"
-	"WebRTC_POC/frontend"
 	"WebRTC_POC/server/backend"
-	"WebRTC_POC/server/coordinator"
+	"WebRTC_POC/server/channels"
+	"WebRTC_POC/server/controller"
 	"WebRTC_POC/server/database/memdb"
 	"WebRTC_POC/server/interceptor"
 	"WebRTC_POC/server/interceptor/auth"
 	"WebRTC_POC/server/interceptor/cors"
+	logg "WebRTC_POC/server/interceptor/log"
 	"WebRTC_POC/server/logging"
 	"WebRTC_POC/server/profiling"
 	"WebRTC_POC/server/profiling/metric"
+	"WebRTC_POC/test/client"
 	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -22,11 +24,10 @@ type PDN struct {
 }
 
 func New() *PDN {
-	err := logging.SetLogLevel("debug")
-	if err != nil {
-
+	if err := logging.SetLogLevel("debug"); err != nil {
+		log.Fatalf("Failed to set log level: %v", err)
 	}
-	cm := coordinator.New()
+	cm := channels.New()
 	me, err := metric.New()
 	if err != nil {
 
@@ -35,14 +36,13 @@ func New() *PDN {
 
 	be := backend.New(cm, me, db)
 	con := controller.New(be)
-	mw := interceptor.New(auth.New(), cors.New())
+	mw := interceptor.New(auth.New(), cors.New(), logg.New(logging.New("app")))
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/channel", interceptor.WithInterceptors(con, mw))
-
-	fs := frontend.New()
-	mux.Handle("/", fs)
+	fs := client.New()
+	mux.Handle("/test/", interceptor.WithInterceptors(fs, mw))
+	mux.Handle("/channel/", interceptor.WithInterceptors(con, mw))
 
 	ps := profiling.New(me)
 
@@ -60,6 +60,6 @@ func (s *PDN) Start() error {
 	go func() {
 		s.profilingServer.Start()
 	}()
-	fmt.Printf("PDN starts to run on :%d\n", 8080)
+	logging.DefaultLogger().Infof(`PDN starts to run on :%d`, 8080)
 	return s.apiServer.ListenAndServe()
 }
