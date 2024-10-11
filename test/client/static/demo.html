@@ -12,6 +12,15 @@
 <button id="startBroadcast">Start Broadcast</button>
 <button id="startView">Start Viewing</button>
 
-<script src="script.js"></script>
+<script type="module">
+  import { startBroadcast } from './broadcast.js';
+  import { startView } from './view.js';
+
+  const startBroadcastButton = document.getElementById('startBroadcast');
+  const startViewButton = document.getElementById('startView');
+
+  startBroadcastButton.onclick = startBroadcast;
+  startViewButton.onclick = startView;
+</script>
 </body>
 </html>

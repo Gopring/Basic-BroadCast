@@ -3,8 +3,9 @@ package controller
 import (
 	"WebRTC_POC/server/backend"
 	"WebRTC_POC/server/logging"
-	"encoding/json"
-	"io"
+	"WebRTC_POC/server/rtc/connection"
+	"WebRTC_POC/types/request"
+	"fmt"
 	"net/http"
 )
 
@@ -13,61 +14,101 @@ const (
 	view      = "/channel/view"
 )
 
-type Request struct {
-	ID  string `json:"id"`
-	Sdp string `json:"sdp"`
-}
-
 type Controller struct {
-	backend *backend.Backend
+	be *backend.Backend
 }
 
-func New(be *backend.Backend) *Controller {
+func New(b *backend.Backend) *Controller {
 	return &Controller{
-		backend: be,
+		be: b,
 	}
 }
 
 func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case broadcast:
-		Broadcast(w, r, c.backend)
+		c.Broadcast(w, r)
 	case view:
-		View(w, r, c.backend)
+		c.View(w, r)
 	default:
 		http.Error(w, "wrong path", http.StatusNotFound)
 	}
 }
 
-func Broadcast(w http.ResponseWriter, r *http.Request, be *backend.Backend) {
-	d, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "failed read body", http.StatusBadRequest)
+func (c *Controller) Broadcast(w http.ResponseWriter, r *http.Request) {
+	req := request.From(r.Context())
+	if req == nil {
+		http.Error(w, "Invalid request data", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
-	req := Request{}
-	if err = json.Unmarshal(d, &req); err != nil {
-		http.Error(w, "failed parse body", http.StatusBadRequest)
+
+	ch, err := c.be.Coordinator.CreateChannel(req.ID)
+	if err != nil {
+		http.Error(w, "channel already exists", http.StatusInternalServerError)
+		return
 	}
-	if err = be.Channels.Broadcast(r.Context(), req.ID, req.Sdp); err != nil {
-		http.Error(w, "failed broadcast", http.StatusInternalServerError)
+
+	conn, err := connection.NewInboundConnection(r.Context(), ch.Config)
+	if err != nil {
+		c.be.Coordinator.RemoveChannel(req.ID)
+		http.Error(w, "failed to make connection", http.StatusInternalServerError)
+		return
+	}
+
+	ch.SetUpstream(r.Context(), conn, req.ID)
+
+	err = conn.StartICE(r.Context(), req.SDP)
+	if err != nil {
+		c.be.Coordinator.RemoveChannel(req.ID)
+		http.Error(w, "failed to ICE", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	_, err = fmt.Fprint(w, conn.ServerSDP())
+	if err != nil {
+		logging.From(r.Context()).Error(err)
+		return
 	}
 }
 
-func View(w http.ResponseWriter, r *http.Request, be *backend.Backend) {
-	d, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "failed read body", http.StatusBadRequest)
+func (c *Controller) View(w http.ResponseWriter, r *http.Request) {
+	req := request.From(r.Context())
+	if req == nil {
+		http.Error(w, "Invalid request data", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
-	req := Request{}
-	if err = json.Unmarshal(d, &req); err != nil {
-		http.Error(w, "failed parse body", http.StatusBadRequest)
+
+	ch, err := c.be.Coordinator.GetChannel(req.ID)
+	if err != nil {
+		http.Error(w, "channel not exists", http.StatusInternalServerError)
+		return
 	}
-	if err = be.Channels.View(r.Context(), req.ID, req.Sdp); err != nil {
-		http.Error(w, "failed view", http.StatusInternalServerError)
+
+	conn, err := connection.NewOutboundConnection(r.Context(), ch.Config)
+	if err != nil {
+		http.Error(w, "failed to make connection", http.StatusInternalServerError)
+		return
+	}
+
+	err = ch.SetDownstream(r.Context(), conn)
+	if err != nil {
+		http.Error(w, "failed to set down stream", http.StatusInternalServerError)
+		return
+	}
+
+	err = conn.StartICE(r.Context(), req.SDP)
+	if err != nil {
+		http.Error(w, "failed to ICE", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	_, err = fmt.Fprint(w, conn.ServerSDP())
+	if err != nil {
 		logging.From(r.Context()).Error(err)
+		return
 	}
 }
