@@ -2,16 +2,19 @@ package controller
 
 import (
 	"WebRTC_POC/server/backend"
-	"WebRTC_POC/server/logging"
 	"WebRTC_POC/server/rtc/connection"
 	"WebRTC_POC/types/request"
-	"fmt"
-	"net/http"
+	"context"
+	"errors"
 )
 
-const (
-	broadcast = "/channel/broadcast"
-	view      = "/channel/view"
+var (
+	InvalidRequest       = errors.New("invalid request data")
+	ChannelAlreadyExists = errors.New("channel already exists")
+	FailedNewConnection  = errors.New("failed to make connection")
+	FailedNewStream      = errors.New("failed to make stream")
+	FailedICE            = errors.New("failed to ICE")
+	ChannelNotFound      = errors.New("channel not found")
 )
 
 type Controller struct {
@@ -24,91 +27,58 @@ func New(b *backend.Backend) *Controller {
 	}
 }
 
-func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch r.URL.Path {
-	case broadcast:
-		c.Broadcast(w, r)
-	case view:
-		c.View(w, r)
-	default:
-		http.Error(w, "wrong path", http.StatusNotFound)
-	}
-}
-
-func (c *Controller) Broadcast(w http.ResponseWriter, r *http.Request) {
-	req := request.From(r.Context())
+func (c *Controller) Broadcast(ctx context.Context) (string, error) {
+	req := request.From(ctx)
 	if req == nil {
-		http.Error(w, "Invalid request data", http.StatusBadRequest)
-		return
+		return "", InvalidRequest
 	}
 
 	ch, err := c.be.Coordinator.CreateChannel(req.ID)
 	if err != nil {
-		http.Error(w, "channel already exists", http.StatusInternalServerError)
-		return
+		return "", ChannelAlreadyExists
 	}
 
-	conn, err := connection.NewInboundConnection(r.Context(), ch.Config)
+	conn, err := connection.NewInboundConnection(ctx, ch.Config)
 	if err != nil {
 		c.be.Coordinator.RemoveChannel(req.ID)
-		http.Error(w, "failed to make connection", http.StatusInternalServerError)
-		return
+		return "", FailedNewConnection
 	}
 
-	ch.SetUpstream(r.Context(), conn, req.ID)
+	ch.SetUpstream(ctx, conn, req.ID)
 
-	err = conn.StartICE(r.Context(), req.SDP)
+	err = conn.StartICE(ctx, req.SDP)
 	if err != nil {
 		c.be.Coordinator.RemoveChannel(req.ID)
-		http.Error(w, "failed to ICE", http.StatusInternalServerError)
-		return
+		return "", FailedICE
 	}
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	_, err = fmt.Fprint(w, conn.ServerSDP())
-	if err != nil {
-		logging.From(r.Context()).Error(err)
-		return
-	}
+	return conn.ServerSDP(), nil
 }
 
-func (c *Controller) View(w http.ResponseWriter, r *http.Request) {
-	req := request.From(r.Context())
+func (c *Controller) View(ctx context.Context) (string, error) {
+	req := request.From(ctx)
 	if req == nil {
-		http.Error(w, "Invalid request data", http.StatusBadRequest)
-		return
+		return "", InvalidRequest
 	}
 
 	ch, err := c.be.Coordinator.GetChannel(req.ID)
 	if err != nil {
-		http.Error(w, "channel not exists", http.StatusInternalServerError)
-		return
+		return "", ChannelNotFound
 	}
 
-	conn, err := connection.NewOutboundConnection(r.Context(), ch.Config)
+	conn, err := connection.NewOutboundConnection(ctx, ch.Config)
 	if err != nil {
-		http.Error(w, "failed to make connection", http.StatusInternalServerError)
-		return
+		return "", FailedNewConnection
 	}
 
-	err = ch.SetDownstream(r.Context(), conn)
+	err = ch.SetDownstream(ctx, conn)
 	if err != nil {
-		http.Error(w, "failed to set down stream", http.StatusInternalServerError)
-		return
+		return "", FailedNewStream
 	}
 
-	err = conn.StartICE(r.Context(), req.SDP)
+	err = conn.StartICE(ctx, req.SDP)
 	if err != nil {
-		http.Error(w, "failed to ICE", http.StatusInternalServerError)
-		return
+		return "", FailedICE
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	_, err = fmt.Fprint(w, conn.ServerSDP())
-	if err != nil {
-		logging.From(r.Context()).Error(err)
-		return
-	}
+	return conn.ServerSDP(), nil
 }

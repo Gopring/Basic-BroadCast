@@ -5,11 +5,11 @@ import (
 	"WebRTC_POC/server/controller"
 	"WebRTC_POC/server/coordinator"
 	"WebRTC_POC/server/database/memdb"
+	"WebRTC_POC/server/handler"
 	"WebRTC_POC/server/interceptor"
 	"WebRTC_POC/server/interceptor/auth"
 	"WebRTC_POC/server/interceptor/cors"
 	logg "WebRTC_POC/server/interceptor/log"
-	"WebRTC_POC/server/interceptor/parse"
 	"WebRTC_POC/server/logging"
 	"WebRTC_POC/server/profiling"
 	"WebRTC_POC/server/profiling/metric"
@@ -33,19 +33,21 @@ func New() *PDN {
 	cm := coordinator.New()
 	me, err := metric.New()
 	if err != nil {
-
+		logging.DefaultLogger().Fatalf("Failed to initialize metrics: %v", err)
 	}
 	db := memdb.New()
 
 	be := backend.New(cm, me, db)
 	con := controller.New(be)
-	mw := interceptor.New(parse.New(), auth.New(), cors.New(), logg.New(logger))
+
+	hd := handler.New(con)
+	mw := interceptor.New(auth.New(), cors.New(), logg.New(logger))
 
 	mux := http.NewServeMux()
 
 	fs := client.New()
 	mux.Handle("/test/", fs)
-	mux.Handle("/channel/", interceptor.WithInterceptors(con, mw))
+	mux.Handle("/channel/", interceptor.WithInterceptors(hd, mw))
 
 	ps := profiling.New(me)
 
